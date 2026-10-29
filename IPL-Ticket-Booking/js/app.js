@@ -19,13 +19,8 @@ const categories = {
   vip: { label: 'VIP lounge', multiplier: 4 }
 };
 
-const currency = new Intl.NumberFormat('en-IN', {
-  style: 'currency',
-  currency: 'INR',
-  maximumFractionDigits: 0
-});
-
-const matchesTableBody = document.getElementById('matchesTableBody');
+const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+const matchesBody = document.getElementById('matchesTableBody');
 const matchesEmpty = document.getElementById('matchesEmpty');
 const teamFilter = document.getElementById('teamFilter');
 const matchSelect = document.getElementById('matchSelect');
@@ -33,58 +28,61 @@ const ticketCategory = document.getElementById('ticketCategory');
 const ticketQuantity = document.getElementById('ticketQuantity');
 const bookingForm = document.getElementById('bookingForm');
 const formMessage = document.getElementById('formMessage');
-const bookingsTableBody = document.getElementById('bookingsTableBody');
+const bookingsBody = document.getElementById('bookingsTableBody');
 const bookingsEmpty = document.getElementById('bookingsEmpty');
 
-const demoBookings = [
-  {
-    id: 'DEMO-IPL26-001',
-    matchId: 'mumbai-chennai',
-    category: 'premium',
-    quantity: 2,
-    total: matches[0].basePrice * categories.premium.multiplier * 2
-  },
-  {
-    id: 'DEMO-IPL26-002',
-    matchId: 'bengaluru-kolkata',
-    category: 'general',
-    quantity: 1,
-    total: matches[1].basePrice
-  }
-];
+const bookings = [
+  { id: 'DEMO-IPL26-001', matchId: 'mumbai-chennai', category: 'premium', quantity: 2 },
+  { id: 'DEMO-IPL26-002', matchId: 'bengaluru-kolkata', category: 'general', quantity: 1 }
+].map((booking) => {
+  const match = matches.find((item) => item.id === booking.matchId);
+  return { ...booking, total: match.basePrice * categories[booking.category].multiplier * booking.quantity };
+});
 
-function formatPrice(amount) {
+function priceText(amount) {
   return currency.format(amount);
 }
 
-function formatDate(dateString) {
-  const date = new Date(`${dateString}T12:00:00`);
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  }).format(date);
+function displayDate(dateString) {
+  return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    .format(new Date(`${dateString}T12:00:00`));
 }
 
-function getMatchLabel(match) {
+function matchName(match) {
   return `${match.home} vs ${match.away}`;
 }
 
+function populateSelects() {
+  const teamNames = new Map();
+  matches.forEach((match) => {
+    teamNames.set(match.homeCode, match.home);
+    teamNames.set(match.awayCode, match.away);
+  });
+  [...teamNames.entries()].sort((a, b) => a[1].localeCompare(b[1])).forEach(([code, name]) => {
+    const option = document.createElement('option');
+    option.value = code;
+    option.textContent = name;
+    teamFilter.append(option);
+  });
+  matches.forEach((match) => {
+    const option = document.createElement('option');
+    option.value = match.id;
+    option.textContent = `${matchName(match)} — ${displayDate(match.date)}`;
+    matchSelect.append(option);
+  });
+}
+
 function renderMatches() {
-  const selectedTeam = teamFilter.value;
-  const visibleMatches = matches.filter((match) => (
-    selectedTeam === 'all' || match.homeCode === selectedTeam || match.awayCode === selectedTeam
-  ));
-
-  matchesTableBody.replaceChildren();
-  matchesEmpty.hidden = visibleMatches.length > 0;
-
-  visibleMatches.forEach((match) => {
+  const team = teamFilter.value;
+  const filteredMatches = matches.filter((match) => team === 'all' || match.homeCode === team || match.awayCode === team);
+  matchesBody.replaceChildren();
+  matchesEmpty.hidden = filteredMatches.length > 0;
+  filteredMatches.forEach((match) => {
     const row = document.createElement('tr');
     const matchCell = document.createElement('td');
     const matchInfo = document.createElement('div');
     const badge = document.createElement('span');
-    const names = document.createElement('span');
+    const name = document.createElement('span');
     const dateCell = document.createElement('td');
     const venueCell = document.createElement('td');
     const priceCell = document.createElement('td');
@@ -95,19 +93,19 @@ function renderMatches() {
     badge.className = 'team-badge';
     badge.textContent = `${match.homeCode} · ${match.awayCode}`;
     badge.setAttribute('aria-hidden', 'true');
-    names.className = 'match-names';
-    names.textContent = getMatchLabel(match);
-    matchInfo.append(badge, names);
+    name.className = 'match-names';
+    name.textContent = matchName(match);
+    matchInfo.append(badge, name);
     matchCell.append(matchInfo);
-    dateCell.textContent = `${formatDate(match.date)} · ${match.time}`;
+    dateCell.textContent = `${displayDate(match.date)} · ${match.time}`;
     venueCell.className = 'match-venue';
     venueCell.textContent = match.venue;
     priceCell.className = 'price-cell';
-    priceCell.textContent = formatPrice(match.basePrice);
+    priceCell.textContent = priceText(match.basePrice);
     bookButton.className = 'table-book-button';
     bookButton.type = 'button';
     bookButton.textContent = 'Book';
-    bookButton.setAttribute('aria-label', `Book ${getMatchLabel(match)}`);
+    bookButton.setAttribute('aria-label', `Book ${matchName(match)}`);
     bookButton.addEventListener('click', () => {
       matchSelect.value = match.id;
       updateSummary();
@@ -116,106 +114,65 @@ function renderMatches() {
     });
     actionCell.append(bookButton);
     row.append(matchCell, dateCell, venueCell, priceCell, actionCell);
-    matchesTableBody.append(row);
+    matchesBody.append(row);
   });
 }
 
-function populateControls() {
-  const teams = new Map();
-  matches.forEach((match) => {
-    teams.set(match.homeCode, match.home);
-    teams.set(match.awayCode, match.away);
-  });
-
-  [...teams.entries()]
-    .sort((first, second) => first[1].localeCompare(second[1]))
-    .forEach(([code, name]) => {
-      const option = document.createElement('option');
-      option.value = code;
-      option.textContent = name;
-      teamFilter.append(option);
-    });
-
-  matches.forEach((match) => {
-    const option = document.createElement('option');
-    option.value = match.id;
-    option.textContent = `${getMatchLabel(match)} — ${formatDate(match.date)}`;
-    matchSelect.append(option);
-  });
-}
-
-function getSelectedMatch() {
+function selectedMatch() {
   return matches.find((match) => match.id === matchSelect.value);
 }
 
-function getCurrentPrice() {
-  const match = getSelectedMatch();
+function selectedUnitPrice() {
+  const match = selectedMatch();
   const category = categories[ticketCategory.value];
-  if (!match || !category) {
-    return null;
-  }
-  return Math.round(match.basePrice * category.multiplier);
+  return match && category ? Math.round(match.basePrice * category.multiplier) : null;
 }
 
 function updateSummary() {
-  const match = getSelectedMatch();
+  const match = selectedMatch();
   const category = categories[ticketCategory.value];
-  const quantityValue = Number(ticketQuantity.value);
-  const quantity = Number.isInteger(quantityValue) && quantityValue > 0 ? quantityValue : 0;
-  const unitPrice = getCurrentPrice();
-
-  document.getElementById('summaryMatch').textContent = match
-    ? `${getMatchLabel(match)} · ${formatDate(match.date)}`
-    : 'Select a match to get started';
+  const quantityNumber = Number(ticketQuantity.value);
+  const quantity = Number.isInteger(quantityNumber) && quantityNumber > 0 ? quantityNumber : 0;
+  const unitPrice = selectedUnitPrice();
+  document.getElementById('summaryMatch').textContent = match ? `${matchName(match)} · ${displayDate(match.date)}` : 'Select a match to get started';
   document.getElementById('summaryCategory').textContent = category ? category.label : '—';
-  document.getElementById('summaryPrice').textContent = unitPrice === null ? '—' : formatPrice(unitPrice);
+  document.getElementById('summaryPrice').textContent = unitPrice === null ? '—' : priceText(unitPrice);
   document.getElementById('summaryQuantity').textContent = String(quantity);
-  document.getElementById('summaryTotal').textContent = unitPrice === null || quantity === 0
-    ? '—'
-    : formatPrice(unitPrice * quantity);
+  document.getElementById('summaryTotal').textContent = unitPrice === null || quantity === 0 ? '—' : priceText(unitPrice * quantity);
 }
 
 function renderBookings() {
-  bookingsTableBody.replaceChildren();
-  bookingsEmpty.hidden = demoBookings.length > 0;
-
-  demoBookings.forEach((booking) => {
+  bookingsBody.replaceChildren();
+  bookings.forEach((booking) => {
     const match = matches.find((item) => item.id === booking.matchId);
     const category = categories[booking.category];
-    if (!match || !category) {
-      return;
-    }
-
+    if (!match || !category) return;
     const row = document.createElement('tr');
-    const idCell = document.createElement('td');
+    const id = document.createElement('td');
     const matchCell = document.createElement('td');
     const categoryCell = document.createElement('td');
     const quantityCell = document.createElement('td');
     const totalCell = document.createElement('td');
-
-    idCell.className = 'booking-id';
-    idCell.textContent = booking.id;
-    matchCell.textContent = getMatchLabel(match);
+    id.className = 'booking-id';
+    id.textContent = booking.id;
+    matchCell.textContent = matchName(match);
     categoryCell.textContent = category.label;
     quantityCell.textContent = String(booking.quantity);
     totalCell.className = 'price-cell';
-    totalCell.textContent = formatPrice(booking.total);
-    row.append(idCell, matchCell, categoryCell, quantityCell, totalCell);
-    bookingsTableBody.append(row);
+    totalCell.textContent = priceText(booking.total);
+    row.append(id, matchCell, categoryCell, quantityCell, totalCell);
+    bookingsBody.append(row);
   });
-
-  bookingsEmpty.hidden = bookingsTableBody.children.length > 0;
+  bookingsEmpty.hidden = bookingsBody.children.length > 0;
 }
 
-function createBookingId() {
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const randomPart = Math.random().toString(36).slice(2, 7).toUpperCase();
-  return `DEMO-${timestamp}-${randomPart}`;
-}
-
-function showFormMessage(message, type) {
+function setMessage(message, success = false) {
   formMessage.textContent = message;
-  formMessage.classList.toggle('success', type === 'success');
+  formMessage.classList.toggle('success', success);
+}
+
+function newBookingId() {
+  return `DEMO-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 }
 
 teamFilter.addEventListener('change', renderMatches);
@@ -225,60 +182,48 @@ ticketQuantity.addEventListener('input', updateSummary);
 
 bookingForm.addEventListener('submit', (event) => {
   event.preventDefault();
-  showFormMessage('', 'default');
-
+  setMessage('');
   if (!bookingForm.reportValidity()) {
-    showFormMessage('Please check the highlighted fields and enter valid details.', 'error');
+    setMessage('Please check the highlighted fields and enter valid details.');
     return;
   }
-
-  const match = getSelectedMatch();
+  const match = selectedMatch();
   const category = categories[ticketCategory.value];
   const quantity = Number(ticketQuantity.value);
-  const unitPrice = getCurrentPrice();
   const phone = document.getElementById('customerPhone').value.trim();
-
+  const unitPrice = selectedUnitPrice();
   if (!match || !category) {
-    showFormMessage('Please select a valid match and ticket category.', 'error');
+    setMessage('Please select a valid match and ticket category.');
     return;
   }
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
-    showFormMessage('Ticket quantity must be a whole number between 1 and 10.', 'error');
+    setMessage('Ticket quantity must be a whole number between 1 and 10.');
     ticketQuantity.focus();
     return;
   }
-  if (!/^[0-9+() .-]{7,20}$/.test(phone)) {
-    showFormMessage('Please enter a valid phone number using 7 to 20 digits or phone symbols.', 'error');
+  if (!/^[0-9+ .-]{7,20}$/.test(phone)) {
+    setMessage('Please enter a valid phone number using 7 to 20 digits or phone symbols.');
     document.getElementById('customerPhone').focus();
     return;
   }
   if (unitPrice === null) {
-    showFormMessage('The selected price could not be calculated. Please choose the match again.', 'error');
+    setMessage('The selected price could not be calculated. Please choose the match again.');
     return;
   }
-
-  const booking = {
-    id: createBookingId(),
-    matchId: match.id,
-    category: ticketCategory.value,
-    quantity,
-    total: unitPrice * quantity
-  };
-  demoBookings.unshift(booking);
+  const booking = { id: newBookingId(), matchId: match.id, category: ticketCategory.value, quantity, total: unitPrice * quantity };
+  bookings.unshift(booking);
   renderBookings();
-  showFormMessage(`Demo booking created successfully. Your booking ID is ${booking.id}.`, 'success');
+  setMessage(`Demo booking created successfully. Your booking ID is ${booking.id}.`, true);
   document.getElementById('my-bookings').scrollIntoView({ behavior: 'smooth' });
 });
 
 const menuToggle = document.getElementById('menuToggle');
 const primaryNav = document.getElementById('primaryNav');
-
 menuToggle.addEventListener('click', () => {
-  const isExpanded = menuToggle.getAttribute('aria-expanded') === 'true';
-  menuToggle.setAttribute('aria-expanded', String(!isExpanded));
-  primaryNav.classList.toggle('open', !isExpanded);
+  const expanded = menuToggle.getAttribute('aria-expanded') === 'true';
+  menuToggle.setAttribute('aria-expanded', String(!expanded));
+  primaryNav.classList.toggle('open', !expanded);
 });
-
 primaryNav.addEventListener('click', (event) => {
   if (event.target instanceof HTMLAnchorElement) {
     primaryNav.classList.remove('open');
@@ -286,7 +231,7 @@ primaryNav.addEventListener('click', (event) => {
   }
 });
 
-populateControls();
+populateSelects();
 renderMatches();
 renderBookings();
 updateSummary();
